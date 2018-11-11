@@ -1,91 +1,92 @@
 <?php
-	require_once('Apartment.php');
-	require_once('Database.php');
 
-	class Elan extends Apartment {
+require_once('Apartment.php');
+require_once('Database.php');
 
-		protected $APARTMENT_ID = 2;
-		protected $url = 'https://www.elanuptown.com/floorplans.php?type=elan';
-		protected $extraUrls = array(
-			'https://www.elanuptown.com/inc/floorplan-slide-generator.php?subtype=townhomes&type=elan-deux&bldgtype=1&duexname=townhomes',
-			'https://www.elanuptown.com/inc/floorplan-slide-generator.php?subtype=studio&type=elan-deux&bldgtype=0&duexname=west',
-			'https://www.elanuptown.com/inc/floorplan-slide-generator.php?subtype=1+bedroom&type=elan-deux&bldgtype=0&duexname=center',
-			'https://www.elanuptown.com/inc/floorplan-slide-generator.php?subtype=2+bedroom&type=elan-deux&bldgtype=0&duexname=center',
-		);
-		protected $resp;
-		protected $data;
+class Elan extends Apartment {
 
-		function parseData() {
-			$data = $this->resp;
-			$startIdx = strpos($data, "var default_mmc_mits");
-			while ($data[$startIdx++] != '[' && $startIdx < strlen($data)) {}
-			$startIdx --;
+	protected $APARTMENT_ID = 2;
+	protected $url = 'https://www.elanuptown.com/floorplans.php?type=elan';
+	protected $extraUrls = array(
+		'https://www.elanuptown.com/inc/floorplan-slide-generator.php?subtype=townhomes&type=elan-deux&bldgtype=1&duexname=townhomes',
+		'https://www.elanuptown.com/inc/floorplan-slide-generator.php?subtype=studio&type=elan-deux&bldgtype=0&duexname=west',
+		'https://www.elanuptown.com/inc/floorplan-slide-generator.php?subtype=1+bedroom&type=elan-deux&bldgtype=0&duexname=center',
+		'https://www.elanuptown.com/inc/floorplan-slide-generator.php?subtype=2+bedroom&type=elan-deux&bldgtype=0&duexname=center',
+	);
+	protected $resp;
+	protected $data;
 
-			for ($endIdx = $startIdx; true; $endIdx++) {
-				if ($data[$endIdx] == ';') {
-					$subString = substr($data, $startIdx, $endIdx - $startIdx);
+	function parseData() {
+		$data = $this->resp;
+		$startIdx = strpos($data, "var default_mmc_mits");
+		while ($data[$startIdx++] != '[' && $startIdx < strlen($data)) {}
+		$startIdx --;
 
-					$json = json_decode($subString, true);
-					break;
-				}
+		for ($endIdx = $startIdx; true; $endIdx++) {
+			if ($data[$endIdx] == ';') {
+				$subString = substr($data, $startIdx, $endIdx - $startIdx);
+
+				$json = json_decode($subString, true);
+				break;
 			}
-			$this->data = $json;
-			//var_dump($this->data);
-			return $this->data;
+		}
+		$this->data = $json;
+		//var_dump($this->data);
+		return $this->data;
+	}
+
+	function getApartmentInfo($column) {
+		$db = new db();
+		$sql = "SELECT apartment_$column 
+			FROM apartment
+			WHERE apartment_id = $this->APARTMENT_ID";
+		$result = $db->query($sql);
+		$row = $result->fetch_assoc();
+		return $row["apartment_$column"];
+	}
+
+	/* @function getFloorplanId finds the floorplan id based of the floorplan name
+	 * @return int the floorplan id
+	 */
+	function getFloorplanId($floorplanName) {
+		$db = new db();
+		// $floorplanName is going to be something like "E2-B3-1 Bedroom"
+		preg_match('/([A-z0-9]+)-/', $floorplanName, $buildingArray);
+		preg_match('/-([A-z0-9]+)\s*-/', $floorplanName, $fpNameArray);
+		preg_match('/-([A-z0-9]+)[ A-z]{0,}$/', $floorplanName, $bedroomArray);
+
+		$fpName = $fpNameArray[1];
+
+		// west: E3
+		// center: E2
+		switch ($buildingArray[1]) {
+		case "TH":
+			$buildingCode = "townhomes";
+			$fpName = "TH-" . $fpName;
+			break;
+		case "E2":
+			$buildingCode = "center";
+			break;
+		case "E3":
+			$buildingCode = "west";
+			break;
 		}
 
-		function getApartmentInfo($column) {
-			$db = new db();
-			$sql = "SELECT apartment_$column 
-				FROM apartment
-				WHERE apartment_id = $this->APARTMENT_ID";
-			$result = $db->query($sql);
-			$row = $result->fetch_assoc();
-			return $row["apartment_$column"];
+		if ($bedroomArray[1] == "Townhome") {
+			// this is just hard coded based off what im seeing in the data, this could by dynamic
+			$beds = 2;
+		} else if ($bedroomArray[1] == "Studio") {
+			$beds = 0;
+		} else {
+			$beds = $bedroomArray[1];
 		}
-
-		/* @function getFloorplanId finds the floorplan id based of the floorplan name
-		 * @return int the floorplan id
-		 */
-		function getFloorplanId($floorplanName) {
-			$db = new db();
-			// $floorplanName is going to be something like "E2-B3-1 Bedroom"
-			preg_match('/([A-z0-9]+)-/', $floorplanName, $buildingArray);
-			preg_match('/-([A-z0-9]+)\s*-/', $floorplanName, $fpNameArray);
-			preg_match('/-([A-z0-9]+)[ A-z]{0,}$/', $floorplanName, $bedroomArray);
-
-			$fpName = $fpNameArray[1];
-
-			// west: E3
-			// center: E2
-			switch ($buildingArray[1]) {
-				case "TH":
-					$buildingCode = "townhomes";
-					$fpName = "TH-" . $fpName;
-					break;
-				case "E2":
-					$buildingCode = "center";
-					break;
-				case "E3":
-					$buildingCode = "west";
-					break;
-			}
-
-			if ($bedroomArray[1] == "Townhome") {
-				// this is just hard coded based off what im seeing in the data, this could by dynamic
-				$beds = 2;
-			} else if ($bedroomArray[1] == "Studio") {
-				$beds = 0;
-			} else {
-				$beds = $bedroomArray[1];
-			}
-			// build floorplan name
-			$sql = sprintf(
-				"SELECT floorplan_id
-				FROM floorplan
-				WHERE floorplan_apartment_id = %d
-				AND floorplan_name = '%s'
-				AND beds = %d"
+		// build floorplan name
+		$sql = sprintf(
+			"SELECT floorplan_id
+			FROM floorplan
+			WHERE floorplan_apartment_id = %d
+			AND floorplan_name = '%s'
+			AND beds = %d"
 			,
 				$this->APARTMENT_ID,
 				$fpName . "-" . $buildingCode,
@@ -127,7 +128,7 @@
 				$floorplanInfo = $ids[$floorplan['FloorplanName']];
 
 				if (!$floorplanInfo) {
-					echo "ERROR: Floorplan id not found for floorplan name: " . $floorplan['FloorplanName'] . PHP_EOL;
+					echo __FILE__ . " ERROR: Floorplan id not found for floorplan name: " . $floorplan['FloorplanName'] . PHP_EOL;
 					continue;
 					// $this->createFloorplan($floorplan);
 					// $floorplanId = $this->getFloorplanId($floorplan['FloorplanName']);
@@ -145,10 +146,10 @@
 				try {
 					$insertResult = $db->insert("floorplan_rent", $params);
 					if (!$insertResult) {
-						echo "An error occurred on insert" . PHP_EOL;
+						echo __FILE__ . " An error occurred on insert" . PHP_EOL;
 					}
 				} catch (Exception $e) {
-					echo "Erro occurred on insert: " . $e . PHP_EOL;
+					echo __FILE__ . " Error occurred on insert: " . $e . PHP_EOL;
 				}
 			}
 
@@ -173,7 +174,6 @@
 				echo $db->error() . PHP_EOL;
 				return 0;
 			} else {
-				echo "insert successful: " . $floorplan['name'] . PHP_EOL;
 				return 1;
 			}
 		}
@@ -218,7 +218,7 @@
 					$floorplanSqft = $outputArray[5];
 				}
 				// get 
-				
+
 				for ($i = 0; $i < count($floorplanNames); $i++) {
 					$floorplans[] = array(
 						'building' => is_array($floorplanBuildings) ? 
@@ -255,4 +255,3 @@
 	}
 
 ?>
-
