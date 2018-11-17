@@ -36,9 +36,7 @@ class Walkway extends Apartment {
 
 				// turn this into a valid JSON string
 				$json = preg_replace("/(\w+):/i", '"$1":', $subString);
-				$json = preg_replace('/"availableUnitsURL.*/i', '"test":"nothing"', $json);
-				$json = preg_replace('/"globalImageCDN.*/i', '"test":"nothing",', $json);
-				$json = preg_replace('/\s*/m', '', $json);
+				$json = preg_replace('/"https":/', 'https:', $json);
 
 				$data = json_decode($json, true);
 				if (!$data) {
